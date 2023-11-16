@@ -14,10 +14,16 @@ import android.telephony.TelephonyManager;
 
 import com.google.android.gms.auth.api.Auth;
 import com.google.android.gms.auth.api.credentials.Credential;
+import com.google.android.gms.auth.api.credentials.Credentials;
 import com.google.android.gms.auth.api.credentials.HintRequest;
+import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.auth.api.identity.SignInClient;
 import com.google.android.gms.auth.api.phone.SmsRetriever;
 import com.google.android.gms.auth.api.phone.SmsRetrieverClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.CommonStatusCodes;
+import com.google.android.gms.common.api.GoogleApi;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.tasks.OnFailureListener;
@@ -154,14 +160,9 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
             return;
         }
 
-        HintRequest hintRequest = new HintRequest.Builder()
-                .setPhoneNumberIdentifierSupported(true)
-                .build();
-        GoogleApiClient mCredentialsClient = new GoogleApiClient.Builder(activity)
-                .addApi(Auth.CREDENTIALS_API)
-                .build();
-        PendingIntent intent = Auth.CredentialsApi.getHintPickerIntent(
-                mCredentialsClient, hintRequest);
+        GetPhoneNumberHintIntentRequest getPhoneNumberHintIntentRequest = GetPhoneNumberHintIntentRequest.builder().build();
+        SignInClient client = Identity.getSignInClient(activity);
+        PendingIntent intent = client.getPhoneNumberHintIntent(getPhoneNumberHintIntentRequest).getResult();
         try {
             activity.startIntentSenderForResult(intent.getIntentSender(),
                     SmsAutoFillPlugin.PHONE_HINT_REQUEST, null, 0, 0, 0);
