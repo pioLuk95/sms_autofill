@@ -1,8 +1,6 @@
 package com.jaumard.smsautofill;
 
-import android.annotation.TargetApi;
 import android.app.Activity;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -12,19 +10,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.telephony.TelephonyManager;
 
-import com.google.android.gms.auth.api.Auth;
-import com.google.android.gms.auth.api.credentials.Credential;
-import com.google.android.gms.auth.api.credentials.Credentials;
-import com.google.android.gms.auth.api.credentials.HintRequest;
+import androidx.annotation.NonNull;
+
 import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest;
 import com.google.android.gms.auth.api.identity.Identity;
 import com.google.android.gms.auth.api.identity.SignInClient;
+import com.google.android.gms.auth.api.identity.SignInCredential;
 import com.google.android.gms.auth.api.phone.SmsRetriever;
 import com.google.android.gms.auth.api.phone.SmsRetrieverClient;
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
-import com.google.android.gms.common.api.GoogleApi;
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -33,8 +28,6 @@ import com.google.android.gms.tasks.Task;
 import java.lang.ref.WeakReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import androidx.annotation.NonNull;
 
 import io.flutter.embedding.android.FlutterView;
 import io.flutter.embedding.engine.FlutterEngine;
@@ -47,7 +40,6 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /**
  * SmsAutoFillPlugin
@@ -67,9 +59,13 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
         public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
             if (requestCode == SmsAutoFillPlugin.PHONE_HINT_REQUEST && pendingHintResult != null) {
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    Credential credential = data.getParcelableExtra(Credential.EXTRA_KEY);
-                    final String phoneNumber = credential.getId();
-                    pendingHintResult.success(phoneNumber);
+                    try {
+                        SignInCredential credential = Identity.getSignInClient(activity).getSignInCredentialFromIntent(data);
+                        final String phoneNumber = credential.getId();
+                        pendingHintResult.success(phoneNumber);
+                    } catch (ApiException e) {
+                        e.printStackTrace();
+                    }
                 } else {
                     pendingHintResult.success(null);
                 }
@@ -82,12 +78,6 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
     public SmsAutoFillPlugin() {
     }
 
-    private SmsAutoFillPlugin(Registrar registrar) {
-        activity = registrar.activity();
-        setupChannel(registrar.messenger());
-        registrar.addActivityResultListener(activityResultListener);
-    }
-
     public void setCode(String code) {
         channel.invokeMethod("smscode", code);
     }
@@ -95,8 +85,8 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
     /**
      * Plugin registration.
      */
-    public static void registerWith(Registrar registrar) {
-        new SmsAutoFillPlugin(registrar);
+    public static void registerWith() {
+        new SmsAutoFillPlugin();
     }
 
     @Override
@@ -150,7 +140,6 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.ECLAIR)
     private void requestHint() {
 
         if (!isSimSupport()) {
@@ -162,13 +151,15 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
 
         GetPhoneNumberHintIntentRequest getPhoneNumberHintIntentRequest = GetPhoneNumberHintIntentRequest.builder().build();
         SignInClient client = Identity.getSignInClient(activity);
-        PendingIntent intent = client.getPhoneNumberHintIntent(getPhoneNumberHintIntentRequest).getResult();
-        try {
-            activity.startIntentSenderForResult(intent.getIntentSender(),
-                    SmsAutoFillPlugin.PHONE_HINT_REQUEST, null, 0, 0, 0);
-        } catch (IntentSender.SendIntentException e) {
-            e.printStackTrace();
-        }
+        client.getPhoneNumberHintIntent(getPhoneNumberHintIntentRequest).addOnSuccessListener(result -> {
+            try {
+                activity.startIntentSenderForResult(result.getIntentSender(),
+                        SmsAutoFillPlugin.PHONE_HINT_REQUEST, null, 0, 0, 0);
+            } catch (IntentSender.SendIntentException e) {
+                e.printStackTrace();
+            }
+        }).addOnFailureListener(Throwable::printStackTrace);
+
     }
 
     public boolean isSimSupport() {
