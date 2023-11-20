@@ -5,11 +5,9 @@ import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
-import android.os.Build;
 import android.util.Base64;
 import android.util.Log;
 
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -48,7 +46,7 @@ public class AppSignatureHelper extends ContextWrapper {
     /**
      * Get all the app signatures for the current package
      *
-     * @return
+     * @return ArrayList<String>
      */
     @SuppressLint("PackageManagerGetSignatures")
     public ArrayList<String> getAppSignatures() {

@@ -15,14 +15,11 @@ import androidx.annotation.NonNull;
 import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest;
 import com.google.android.gms.auth.api.identity.Identity;
 import com.google.android.gms.auth.api.identity.SignInClient;
-import com.google.android.gms.auth.api.identity.SignInCredential;
 import com.google.android.gms.auth.api.phone.SmsRetriever;
 import com.google.android.gms.auth.api.phone.SmsRetrieverClient;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Status;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
 import java.lang.ref.WeakReference;
@@ -55,13 +52,13 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
     private SmsBroadcastReceiver broadcastReceiver;
     private final PluginRegistry.ActivityResultListener activityResultListener = new PluginRegistry.ActivityResultListener() {
 
+
         @Override
         public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
             if (requestCode == SmsAutoFillPlugin.PHONE_HINT_REQUEST && pendingHintResult != null) {
                 if (resultCode == Activity.RESULT_OK && data != null) {
                     try {
-                        SignInCredential credential = Identity.getSignInClient(activity).getSignInCredentialFromIntent(data);
-                        final String phoneNumber = credential.getId();
+                        final String phoneNumber = Identity.getSignInClient(activity).getPhoneNumberFromIntent(data);
                         pendingHintResult.success(phoneNumber);
                     } catch (ApiException e) {
                         e.printStackTrace();
@@ -101,29 +98,21 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
                 SmsRetrieverClient client = SmsRetriever.getClient(activity);
                 Task<Void> task = client.startSmsRetriever();
 
-                task.addOnSuccessListener(new OnSuccessListener<Void>() {
-                    @Override
-                    public void onSuccess(Void aVoid) {
-                        unregisterReceiver();// unregister existing receiver
-                        broadcastReceiver = new SmsBroadcastReceiver(new WeakReference<>(SmsAutoFillPlugin.this),
-                                smsCodeRegexPattern);
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            activity.registerReceiver(broadcastReceiver,
-                                    new IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION), Context.RECEIVER_NOT_EXPORTED);
-                        } else {
-                            activity.registerReceiver(broadcastReceiver,
-                                    new IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION));
-                        }
-                        result.success(null);
+                task.addOnSuccessListener(aVoid -> {
+                    unregisterReceiver();// unregister existing receiver
+                    broadcastReceiver = new SmsBroadcastReceiver(new WeakReference<>(SmsAutoFillPlugin.this),
+                            smsCodeRegexPattern);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        activity.registerReceiver(broadcastReceiver,
+                                new IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION), Context.RECEIVER_EXPORTED);
+                    } else {
+                        activity.registerReceiver(broadcastReceiver,
+                                new IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION));
                     }
+                    result.success(null);
                 });
 
-                task.addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        result.error("ERROR_START_SMS_RETRIEVER", "Can't start sms retriever", null);
-                    }
-                });
+                task.addOnFailureListener(e -> result.error("ERROR_START_SMS_RETRIEVER", "Can't start sms retriever", null));
                 break;
             case "unregisterListener":
                 unregisterReceiver();
@@ -177,7 +166,7 @@ public class SmsAutoFillPlugin implements FlutterPlugin, ActivityAware, MethodCa
             try {
                 activity.unregisterReceiver(broadcastReceiver);
             } catch (Exception ex) {
-                // silent catch to avoir crash if receiver is not registered
+                // silent catch to avoid crash if receiver is not registered
             }
             broadcastReceiver = null;
         }
